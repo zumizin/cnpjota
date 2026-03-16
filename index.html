@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Consultor de CNPJ - Atividade</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #e9ecef; display: flex; justify-content: center; padding: 40px; }
+        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 600px; }
+        h2 { color: #2c3e50; text-align: center; margin-bottom: 25px; }
+        .search-group { display: flex; gap: 10px; margin-bottom: 20px; }
+        input { flex: 1; padding: 12px; border: 2px solid #ddd; border-radius: 6px; outline: none; font-size: 16px; }
+        input:focus { border-color: #3498db; }
+        button { padding: 12px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .btn-blue { background: #3498db; color: white; }
+        .btn-blue:hover { background: #2980b9; }
+        .btn-pdf { background: #27ae60; color: white; width: 100%; margin-top: 20px; display: none; }
+        #resultado { background: #f8f9fa; border-radius: 8px; padding: 15px; display: none; margin-top: 15px; }
+        .campo { margin-bottom: 10px; font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+        .label { font-weight: bold; color: #7f8c8d; text-transform: uppercase; font-size: 11px; display: block; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>Consulta de Empresas</h2>
+    <div class="search-group">
+        <input type="text" id="cnpjInput" placeholder="Digite o CNPJ (ex: 00000000000191)">
+        <button class="btn-blue" onclick="buscar()">Buscar</button>
+    </div>
+
+    <div id="resultado"></div>
+    <button id="btnPdf" class="btn-pdf" onclick="gerarPDF()">Baixar Relatório PDF</button>
+</div>
+
+<script>
+    let dadosGlobais = null;
+
+    function buscar() {
+        const cnpj = document.getElementById('cnpjInput').value.replace(/\D/g, '');
+        const resDiv = document.getElementById('resultado');
+        const btnPdf = document.getElementById('btnPdf');
+
+        if (cnpj.length !== 14) {
+            alert("CNPJ deve ter 14 números.");
+            return;
+        }
+
+        resDiv.style.display = 'block';
+        resDiv.innerHTML = "<em>Carregando dados da Receita Federal...</em>";
+
+        // Técnica JSONP para evitar erro de CORS no navegador
+        const script = document.createElement('script');
+        script.src = `https://receitaws.com.br/v1/cnpj/${cnpj}?callback=retornoAPI`;
+        document.body.appendChild(script);
+    }
+
+    function retornoAPI(data) {
+        const resDiv = document.getElementById('resultado');
+        const btnPdf = document.getElementById('btnPdf');
+
+        if (data.status === "ERROR") {
+            resDiv.innerHTML = `<b style="color:red">Erro: ${data.message}</b><br><small>Dica: Aguarde 1 minuto para tentar novamente (limite da API).</small>`;
+            btnPdf.style.display = 'none';
+            return;
+        }
+
+        dadosGlobais = data;
+        btnPdf.style.display = 'block';
+
+        resDiv.innerHTML = `
+            <div class="campo"><span class="label">Razão Social</span>${data.nome}</div>
+            <div class="campo"><span class="label">Nome Fantasia</span>${data.fantasia || 'N/A'}</div>
+            <div class="campo"><span class="label">Atividade Principal</span>${data.atividade_principal[0].text}</div>
+            <div class="campo"><span class="label">Capital Social</span>R$ ${parseFloat(data.capital_social).toLocaleString('pt-BR')}</div>
+            <div class="campo"><span class="label">Telefone</span>${data.telefone}</div>
+            <div class="campo"><span class="label">Endereço</span>${data.logradouro}, ${data.numero} - ${data.municipio}/${data.uf}</div>
+        `;
+    }
+
+    function gerarPDF() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        doc.setFontSize(16);
+        doc.text("Relatório Cadastral de Pessoa Jurídica", 20, 20);
+        
+        doc.setFontSize(10);
+        doc.text(`Razão Social: ${dadosGlobais.nome}`, 20, 40);
+        doc.text(`CNPJ: ${dadosGlobais.cnpj}`, 20, 50);
+        doc.text(`Atividade: ${dadosGlobais.atividade_principal[0].text}`, 20, 60);
+        doc.text(`Endereço: ${dadosGlobais.logradouro}, ${dadosGlobais.numero}`, 20, 70);
+        doc.text(`Cidade/UF: ${dadosGlobais.municipio} - ${dadosGlobais.uf}`, 20, 80);
+        
+        doc.save('relatorio-cnpj.pdf');
+    }
+</script>
+
+</body>
+</html>
